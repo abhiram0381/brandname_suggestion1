@@ -19,7 +19,7 @@ type BrandSuggestion = {
 };
 
 const formSchema = z.object({
-  description: z.string().min(10, "Description should be at least 10 characters").max(500, "Too long"),
+  description: z.string().min(1, "Please describe what you're building").max(500, "Too long"),
   category: z.string().min(2, "Please select or enter a category"),
   keywords: z.string().optional()
 });
