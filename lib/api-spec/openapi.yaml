@@ -1,0 +1,175 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: brands
+    description: Brand name generation
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /brands/generate:
+    post:
+      operationId: generateBrands
+      tags: [brands]
+      summary: Generate brand name suggestions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BrandInput"
+      responses:
+        "200":
+          description: List of brand suggestions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BrandSuggestion"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /brands/availability:
+    post:
+      operationId: checkBrandAvailability
+      tags: [brands]
+      summary: Check real domain and social media availability for a brand name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AvailabilityInput"
+      responses:
+        "200":
+          description: Availability results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrandAvailability"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    BrandInput:
+      type: object
+      required:
+        - description
+        - category
+      properties:
+        description:
+          type: string
+        category:
+          type: string
+        keywords:
+          type: ["string", "null"]
+    BrandSuggestion:
+      type: object
+      required:
+        - name
+        - tagline
+        - suggestedDomain
+      properties:
+        name:
+          type: string
+          description: Brand name
+        tagline:
+          type: string
+          description: Short brand tagline
+        suggestedDomain:
+          type: string
+          description: Suggested .com domain (e.g. "brandname.com")
+    AvailabilityInput:
+      type: object
+      required:
+        - name
+        - domain
+      properties:
+        name:
+          type: string
+          description: Brand name (used as username handle)
+        domain:
+          type: string
+          description: Domain to check (e.g. "brandname.com")
+    BrandAvailability:
+      type: object
+      required:
+        - domain
+        - social
+      properties:
+        domain:
+          $ref: "#/components/schemas/DomainStatus"
+        social:
+          $ref: "#/components/schemas/SocialStatus"
+    DomainStatus:
+      type: object
+      required:
+        - name
+        - available
+      properties:
+        name:
+          type: string
+        available:
+          type: boolean
+    SocialStatus:
+      type: object
+      required:
+        - instagram
+        - twitter
+        - facebook
+        - tiktok
+      properties:
+        instagram:
+          type: boolean
+          description: true = handle appears available
+        twitter:
+          type: boolean
+        facebook:
+          type: boolean
+        tiktok:
+          type: boolean
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
