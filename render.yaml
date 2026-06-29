@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: brand-generator-api
+    env: node
+    buildCommand: corepack enable pnpm && pnpm install && pnpm --filter @workspace/api-server run build
+    startCommand: pnpm --filter @workspace/api-server run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: GROQ_API_KEY
+        sync: false
+
+  - type: web
+    name: brand-generator-frontend
+    env: static
+    buildCommand: corepack enable pnpm && pnpm install && pnpm --filter @workspace/brand-generator run build
+    staticPublishPath: artifacts/brand-generator/dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        fromService:
+          type: web
+          name: brand-generator-api
+          envVarKey: RENDER_EXTERNAL_URL
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
