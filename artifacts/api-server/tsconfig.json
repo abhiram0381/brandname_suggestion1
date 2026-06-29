@@ -5,7 +5,11 @@
     "tsBuildInfoFile": ".tsbuildinfo",
     "outDir": "dist",
     "rootDir": "src",
-    "types": ["node"]
+    "types": ["node"],
+    // The server is bundled by esbuild (which resolves `.ts` import specifiers);
+    // tsc only type-checks, so allow the explicit extensions and never emit.
+    "allowImportingTsExtensions": true,
+    "noEmit": true
   },
   "include": ["src"],
   "references": [

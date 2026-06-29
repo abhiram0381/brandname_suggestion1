@@ -25,6 +25,24 @@ function cleanName(value: string): string {
   return cleaned || "Brand";
 }
 
+// A clean, lowercase, alphanumeric handle/domain stem derived from a brand name.
+function toSlug(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+// The model is asked for `{ "names": [...] }`, but be tolerant of a bare array or
+// other common wrapper keys so a minor format slip doesn't fail the whole call.
+function extractNameList(parsed: unknown): unknown[] {
+  if (Array.isArray(parsed)) return parsed;
+  if (parsed && typeof parsed === "object") {
+    const record = parsed as Record<string, unknown>;
+    for (const key of ["names", "brands", "suggestions", "results"]) {
+      if (Array.isArray(record[key])) return record[key] as unknown[];
+    }
+  }
+  return [];
+}
+
 function generateLocalSuggestions(
   description: string,
   category: string,
@@ -126,28 +144,21 @@ router.post("/brands/generate", async (req, res) => {
       return;
     }
 
-    const prompt = `You are an expert startup brand-namer. Invent exactly 18 ORIGINAL, coined brand names for the business below. The goal is names that are highly likely to be UNREGISTERED — a free .com domain and free social handles.
-
-Business: ${description}
-Industry: ${category}
-${keywords ? `Style / keywords: ${keywords}` : ""}
+    const systemPrompt = `You are an expert startup brand-namer. You invent ORIGINAL, coined brand names that are highly likely to be UNREGISTERED — a free .com domain and free social handles.
 
 Hard requirements for EVERY name:
-- It must be an INVENTED / coined word or an unexpected portmanteau — NOT a common dictionary word and NOT the name of any existing company or product. Think in the spirit of Spotify, Twilio, Klarna, Zalando, Notion, Stripe.
+- An INVENTED / coined word or an unexpected portmanteau — NOT a common dictionary word and NOT the name of any existing company or product. In the spirit of Spotify, Twilio, Klarna, Zalando, Notion, Stripe.
 - A single word, 5-14 letters, no spaces, no hyphens, easy to pronounce and spell.
 - Do NOT lean on overused, already-taken patterns like the suffixes/prefixes "ly", "ify", "hub", "get", "go", "app", "io", "labs", "tech", "ai", "nest", "spark", "wave" unless they are fused into a genuinely novel coined word.
-- All 18 names must be clearly distinct from one another.
-- "suggestedDomain" = the name in lowercase + ".com".
+- All names must be clearly distinct from one another.
 - Tagline: punchy, under 8 words.
 
-Respond ONLY with a valid JSON array, no markdown, no explanation:
-[
-  {
-    "name": "Coinedname",
-    "tagline": "Short catchy tagline here",
-    "suggestedDomain": "coinedname.com"
-  }
-]`;
+Respond ONLY with a JSON object of exactly this shape — no markdown, no commentary:
+{ "names": [ { "name": "Coinedname", "tagline": "Short catchy tagline" } ] }
+Return exactly 18 entries in "names".`;
+
+    const userPrompt = `Business: ${description}
+Industry: ${category}${keywords ? `\nStyle / keywords: ${keywords}` : ""}`;
 
     const groqResponse = await fetch(GROQ_URL, {
       method: "POST",
@@ -157,9 +168,15 @@ Respond ONLY with a valid JSON array, no markdown, no explanation:
       },
       body: JSON.stringify({
         model: "llama-3.3-70b-versatile",
-        temperature: 1.0,
+        temperature: 0.9,
         max_tokens: 2048,
-        messages: [{ role: "user", content: prompt }],
+        // JSON mode forces syntactically valid JSON, eliminating the markdown /
+        // prose wrapping that previously broke parsing.
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
       }),
     });
 
@@ -172,16 +189,40 @@ Respond ONLY with a valid JSON array, no markdown, no explanation:
     const groqJson = (await groqResponse.json()) as {
       choices?: { message?: { content?: string } }[];
     };
-    const content = groqJson.choices?.[0]?.message?.content ?? "[]";
+    const content = groqJson.choices?.[0]?.message?.content ?? "{}";
 
-    let suggestions: BrandSuggestion[];
+    let rawList: unknown[];
     try {
-      const cleaned = content.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(cleaned);
-      suggestions = Array.isArray(parsed) ? parsed : [];
+      rawList = extractNameList(JSON.parse(content) as unknown);
     } catch {
       req.log.error({ content }, "Failed to parse Groq JSON response");
       res.status(500).json({ error: "Failed to parse AI response" });
+      return;
+    }
+
+    // Validate, normalise and de-duplicate the model's output. The domain is
+    // always derived from the slugified name, so the availability check matches
+    // the brand we display regardless of what the model returned for it.
+    const seen = new Set<string>();
+    const suggestions: BrandSuggestion[] = [];
+    for (const item of rawList) {
+      if (typeof item !== "object" || item === null) continue;
+      const record = item as Record<string, unknown>;
+      const name = typeof record.name === "string" ? record.name.trim() : "";
+      const slug = toSlug(name);
+      if (!slug || seen.has(slug)) continue;
+      seen.add(slug);
+      const tagline =
+        typeof record.tagline === "string" && record.tagline.trim()
+          ? record.tagline.trim()
+          : "Your idea, beautifully named";
+      suggestions.push({ name, tagline, suggestedDomain: `${slug}.com` });
+    }
+
+    // If the model returned nothing usable, fall back to the local generator
+    // rather than showing the user an empty result.
+    if (suggestions.length === 0) {
+      res.json(generateLocalSuggestions(description, category, keywords));
       return;
     }
 

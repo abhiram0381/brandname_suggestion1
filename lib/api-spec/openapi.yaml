@@ -74,6 +74,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BrandAvailability"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: Server error
           content:
@@ -100,7 +106,8 @@ components:
         category:
           type: string
         keywords:
-          type: ["string", "null"]
+          type: string
+          description: Optional style/keyword hints
     BrandSuggestion:
       type: object
       required:
@@ -129,6 +136,12 @@ components:
         domain:
           type: string
           description: Domain to check (e.g. "brandname.com")
+    AvailabilityStatus:
+      type: string
+      enum: [available, taken, unknown]
+      description: >-
+        "available" = appears unregistered, "taken" = registered,
+        "unknown" = could not be verified (e.g. the platform blocks automated checks).
     BrandAvailability:
       type: object
       required:
@@ -143,29 +156,25 @@ components:
       type: object
       required:
         - name
-        - available
+        - status
       properties:
         name:
           type: string
-        available:
-          type: boolean
+        status:
+          $ref: "#/components/schemas/AvailabilityStatus"
     SocialStatus:
       type: object
       required:
         - instagram
         - twitter
-        - facebook
-        - tiktok
+        - linkedin
       properties:
         instagram:
-          type: boolean
-          description: true = handle appears available
+          $ref: "#/components/schemas/AvailabilityStatus"
         twitter:
-          type: boolean
-        facebook:
-          type: boolean
-        tiktok:
-          type: boolean
+          $ref: "#/components/schemas/AvailabilityStatus"
+        linkedin:
+          $ref: "#/components/schemas/AvailabilityStatus"
     ErrorResponse:
       type: object
       required:

@@ -4,13 +4,9 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
-const rawPort = process.env.PORT;
-
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
+// PORT only matters for the dev/preview server; `vite build` doesn't use it.
+// Default to 5173 so a plain build (e.g. on CI / Render static) works without it.
+const rawPort = process.env.PORT ?? "5173";
 
 const port = Number(rawPort);
 
@@ -18,13 +14,9 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-const basePath = process.env.BASE_PATH;
-
-if (!basePath) {
-  throw new Error(
-    "BASE_PATH environment variable is required but was not provided.",
-  );
-}
+// Asset base path. Defaults to "/" (served at root); set BASE_PATH to deploy
+// under a sub-path.
+const basePath = process.env.BASE_PATH || "/";
 
 export default defineConfig({
   base: basePath,
